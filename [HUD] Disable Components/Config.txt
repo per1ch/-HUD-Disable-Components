@@ -1,0 +1,7 @@
+HideDrawFrontOverhead=true
+HideHoverTexts=true
+HideVoiceChatIndicator=true
+HideSpeechBubbles=false
+HideFloatingMessages=true
+HideOrderIconsOnCharacters=true
+HideObjectiveIconsOnCharacters=true
