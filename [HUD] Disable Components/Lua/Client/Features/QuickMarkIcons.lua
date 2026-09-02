@@ -39,9 +39,13 @@ Safe.PatchMethod("Barotrauma.CrewManager", "UpdateReports", nil, function(instan
     ptable.PreventExecution = true
 end, Hook.HookMethodType.Before)
 
--- If the bar was already on screen when the setting was switched on, the
--- suppressed update will never hide it. One pass on the change does.
-ClientState.AddChangeListener(function()
+-- Held hidden every frame rather than once on the change. Two reasons the
+-- one-shot was not enough: the change listener only fires when the server
+-- pushes a policy, so it never runs in singleplayer at all; and whether the
+-- suppressed UpdateReports has already shown the bar this frame depends on
+-- hook ordering, which is not ours to decide. Forcing the flag each frame
+-- is one bool write and does not care about either.
+Safe.AddHook("think", "HDC.QuickMarkIcons.HideContainer", function()
     if not enabled() then return end
     local frame = reportButtons()
     if frame == nil then return end

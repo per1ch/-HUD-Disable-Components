@@ -1,14 +1,23 @@
 -- Lua/Client/Features/GiveInButton.lua — CLIENT
 -- Spec item 11: neutralise the "Give In" (surrender/suicide) button.
 --
--- Disabled rather than merely hidden: hiding a button that still works
--- leaves the underlying action reachable through other paths. The button
--- stays visible but greyed out, and the action itself is blocked.
+-- The button is CharacterHealth.SuicideButton, a public property, so it can
+-- be reached directly. CharacterHealth.UpdateClientSpecific re-decides its
+-- Visible flag every update, which is why hiding it belongs on a per-frame
+-- hook rather than a one-shot: anything set once is overwritten on the next
+-- update. Nothing in the game writes Enabled, so that half is this module's
+-- to hold and to give back.
 --
--- Note this is the client-side half only. A client with a modified game
--- could still trigger the underlying kill; genuine enforcement belongs on
--- the server, which is why the server also refuses the resulting state
--- change where it can (see Server/Moderation.lua for the same pattern).
+-- Hiding it is also what disables it: CharacterHealth only calls
+-- SuicideButton.AddToGUIUpdateList() when the button is visible, so an
+-- invisible button is never in the update list to be clicked. Enabled is
+-- cleared as well so the state is explicit rather than incidental.
+--
+-- This module previously searched the whole canvas each frame for a button
+-- whose text matched a "Give In" translation, and patched
+-- Character.GiveInToPressure. No such method exists on Character, so that
+-- patch failed at load, and the canvas search went through
+-- Safe.WalkComponents, which did not descend past its own root.
 
 HDC = HDC or {}
 
@@ -21,46 +30,15 @@ local function enabled()
     return ClientState.Get(KEY)
 end
 
--- Block the underlying "give in to pressure / accept death" action.
-Safe.PatchMethod("Barotrauma.Character", "GiveInToPressure", nil, function(instance, ptable)
-    if not enabled() then return end
-    ptable.PreventExecution = true
-end, Hook.HookMethodType.Before)
-
--- The button lives on the character HUD's death/ragdoll prompt. Find it by
--- its text and disable it, rather than depending on a private field name.
-local giveInLabels = nil
-
-local function matchesGiveInLabel(text)
-    if text == nil then return false end
-    if giveInLabels == nil then
-        giveInLabels = {}
-        for _, tag in ipairs({ "GiveInButton", "GiveIn", "give in" }) do
-            local translated = Safe.Get(function()
-                return tostring(TextManager.Get(tag).Value)
-            end)
-            if translated ~= nil and translated ~= "" then
-                giveInLabels[string.lower(translated)] = true
-            end
-        end
-        giveInLabels["give in"] = true
-    end
-    return giveInLabels[string.lower(tostring(text))] == true
-end
-
-local function disableGiveInButtons(root)
-    Safe.WalkComponents(root, function(node)
-        local textBlock = Safe.Get(function() return node.TextBlock end)
-        if textBlock == nil then return end
-        local text = Safe.Get(function() return tostring(textBlock.Text) end)
-        if not matchesGiveInLabel(text) then return end
-        Safe.Set(function() node.Enabled      = false end)
-        Safe.Set(function() node.CanBeFocused = false end)
-        Safe.Set(function() node.OnClicked    = function() return true end end)
+Safe.AddHook("think", "HDC.GiveInButton.Disable", function()
+    local button = Safe.Get(function()
+        return Character.Controlled.CharacterHealth.SuicideButton
     end)
-end
+    if button == nil then return end
 
-Safe.PatchMethod("Barotrauma.CharacterHUD", "AddToGUIUpdateList", nil, function(instance, ptable)
-    if not enabled() then return end
-    disableGiveInButtons(Safe.Get(function() return GUI.Canvas end))
-end, Hook.HookMethodType.After)
+    local off = enabled()
+    Safe.Set(function() button.Enabled = not off end)
+    if off then
+        Safe.Set(function() button.Visible = false end)
+    end
+end)
