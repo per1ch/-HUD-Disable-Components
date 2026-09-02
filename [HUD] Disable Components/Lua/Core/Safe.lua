@@ -116,13 +116,15 @@ function Safe.WalkComponents(root, visitFn)
         local node = table.remove(stack)
         if node ~= nil then
             pcall(visitFn, node)
-            local children = Safe.Get(function() return node.Children end)
-            if children ~= nil then
-                pcall(function()
-                    for child in children do
-                        table.insert(stack, child)
-                    end
-                end)
+            -- Indexed access rather than iterating node.Children. Children
+            -- is a lazily-evaluated C# IEnumerable, and the generic-for
+            -- over it yielded nothing here — inside a pcall, so it failed
+            -- silently and this walk only ever visited its own root. Every
+            -- feature built on it was a no-op for that reason.
+            local count = Safe.Get(function() return node.CountChildren end) or 0
+            for index = 0, count - 1 do
+                local child = Safe.Get(function() return node.GetChild(index) end)
+                if child ~= nil then table.insert(stack, child) end
             end
         end
     end
