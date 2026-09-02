@@ -185,9 +185,20 @@ local function build()
                 numberInput.valueStep     = entry.step or 0.05
                 numberInput.FloatValue    = ClientState.GetNumber(capturedKey)
             end)
+            -- OnValueChanged fires for programmatic writes as well as for
+            -- user edits, and Refresh() writes FloatValue on every policy
+            -- push from the server. Committing unconditionally therefore
+            -- made the server's own broadcast bounce straight back at it:
+            -- send -> broadcast -> Refresh -> OnValueChanged -> send, one
+            -- round trip per frame, for every client, until the menu closed.
+            -- Any change already present in ClientState is an echo of that
+            -- push, so it stops here.
             numberInput.OnValueChanged = function()
                 if not ui.canEdit then return end
-                setValue(capturedKey, Safe.Get(function() return numberInput.FloatValue end))
+                local entered = Safe.Get(function() return numberInput.FloatValue end)
+                if entered == nil then return end
+                if math.abs(entered - ClientState.GetNumber(capturedKey)) < 1e-4 then return end
+                setValue(capturedKey, entered)
                 commitChange()
             end
 

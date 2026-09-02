@@ -47,13 +47,18 @@ if not patched then
         suppressBubble, Hook.HookMethodType.Before)
 end
 
-Safe.AddHook("think", "HDC.VoiceBubbles.ClearQueued", function()
+-- Clearing the field as DrawFront begins is what actually hides the bubble,
+-- and it is not redundant with the patch above. The bubble is drawn at the
+-- end of Character.DrawFront straight out of this field, and VoipClient
+-- recreates it on every incoming voice packet — so a sweep on a separate
+-- schedule (this module previously used a think hook over CharacterList)
+-- always loses to a packet that lands between the sweep and the draw. Here
+-- there is no gap: the field is cleared inside the call that reads it.
+Safe.PatchMethod("Barotrauma.Character", "DrawFront", {
+    "Microsoft.Xna.Framework.Graphics.SpriteBatch",
+    "Barotrauma.Camera"
+}, function(instance, ptable)
     if not enabled() then return end
-    local characters = Safe.Get(function() return Character.CharacterList end)
-    if characters == nil then return end
-    for _, character in pairs(characters) do
-        if not isLocalPlayer(character) then
-            Safe.Set(function() character.textlessSpeechBubble = nil end)
-        end
-    end
-end)
+    if instance == nil or isLocalPlayer(instance) then return end
+    Safe.Set(function() instance.textlessSpeechBubble = nil end)
+end, Hook.HookMethodType.Before)
