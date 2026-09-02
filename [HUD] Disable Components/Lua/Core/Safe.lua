@@ -86,6 +86,23 @@ function Safe.AddCommand(name, description, handler, validation, isCheat)
     return ok
 end
 
+-- The C# GUI static class. LuaCs exposes it either directly as the global
+-- GUI or nested one level down, so both are tried. Features that flip a
+-- vanilla global HUD switch go through here instead of patching a draw
+-- call, because the switch is what the game itself checks.
+function Safe.GUIStatic()
+    local gui = Safe.Get(function() return GUI end)
+    if gui == nil then return nil end
+    return Safe.Get(function() return gui.GUI end) or gui
+end
+
+-- Static-member accessor for a C# type LuaCs does not expose as a global,
+-- for the cases where a private static field is the only thing gating a
+-- draw. Returns nil if the type cannot be resolved.
+function Safe.Static(typeName)
+    return Safe.Get(function() return LuaUserData.CreateStatic(typeName) end)
+end
+
 -- Walks a GUIComponent tree (depth-first over .Children) and calls
 -- visitFn(node) on every node found, including the root. Used by features
 -- that need to locate a GUI element generically (by matching text/style)

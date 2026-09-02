@@ -28,15 +28,9 @@ local function transparentColor()
     return transparent
 end
 
-local function guiStatic()
-    local gui = Safe.Get(function() return GUI end)
-    if gui == nil then return nil end
-    return Safe.Get(function() return gui.GUI end) or gui
-end
-
 -- The vanilla switch that hides names above heads.
 Safe.AddHook("think", "HDC.PlayerNames.ToggleGlobalSwitch", function()
-    local static = guiStatic()
+    local static = Safe.GUIStatic()
     if static == nil then return end
     Safe.Set(function() static.DisableCharacterNames = enabled() end)
 end)
