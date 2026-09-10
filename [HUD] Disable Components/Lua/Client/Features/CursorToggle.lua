@@ -5,7 +5,7 @@ local ClientState = HDC.ClientState
 
 local KEY = "HideOwnCursor"
 
-local TICK_MS = 100  -- 10 Hz; plenty fast for a cursor flag, cheap enough to run forever
+local TICK_MS = 1000  -- 10 Hz; plenty fast for a cursor flag, cheap enough to run forever
 
 local function shouldHideCursor()
     if ClientState.GetLocal(KEY) ~= true then return false end
