@@ -23,28 +23,15 @@ HDC = HDC or {}
 local Safe        = HDC.Safe
 local ClientState = HDC.ClientState
 
-local KEY = "HideChatNameLink"
+local KEY = "HideCursor"
 
-Safe.MakeFieldAccessible("Barotrauma.ChatBox", "chatBox")
+Safe.MakeFieldAccessible("Barotrauma.GUI", "HideCursor")
 
 local function enabled()
     return ClientState.Get(KEY)
 end
 
-local function stripLinks(messageList)
-    if messageList == nil then return end
-    Safe.WalkComponents(messageList, function(node)
-        Safe.Set(function() node.CanBeFocused = false end)
-        Safe.Set(function() node.ClickableAreas.Clear() end)
-    end)
-end
-
--- The whole list is re-stripped on each arriving message rather than just
--- the new row. Chat holds sixty messages at most, so the walk is cheap, and
--- doing it this way means messages that were already in the log when the
--- setting was switched on get cleaned up too, without a separate pass that
--- has to be triggered from somewhere.
-Safe.PatchMethod("Barotrauma.ChatBox", "AddMessage", nil, function(instance, ptable)
+Safe.PatchMethod("Barotrauma.GUI", "HideCursor", nil, function(instance, ptable)
     if not enabled() then return end
     if instance == nil then return end
     stripLinks(Safe.Get(function() return instance.chatBox.Content end))
