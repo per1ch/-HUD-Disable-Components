@@ -42,6 +42,7 @@ if SERVER then
     load("Server/AliveCommand.lua")
     load("Server/RemoteConsole.lua")
     load("Server/Integrity.lua")
+    load("Server/GiveInBlock.lua")
 
     HDC.Safe.Log("server module loaded (v" .. HDC.Version .. ")")
     return
