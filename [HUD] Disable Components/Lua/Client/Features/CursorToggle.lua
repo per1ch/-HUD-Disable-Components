@@ -3,16 +3,37 @@ HDC = HDC or {}
 local Safe        = HDC.Safe
 local ClientState = HDC.ClientState
 
-local KEY = "HideCursor"
+local KEY = "HideOwnCursor"
 
-Safe.MakeFieldAccessible("Barotrauma.GUI", "HideCursor")
+local TICK_MS = 100  -- 10 Hz; plenty fast for a cursor flag, cheap enough to run forever
 
-local function enabled()
-    return ClientState.Get(KEY)
+local function shouldHideCursor()
+    if ClientState.GetLocal(KEY) ~= true then return false end
+    if Safe.Get(function() return GUI.PauseMenuOpen end) == true then return false end
+
+    local controlled = Safe.Get(function()
+        local c = Character.Controlled
+        if c == nil then return false end
+        if c.IsDead == true then return false end
+        return true
+    end)
+    return controlled == true
 end
 
-Safe.PatchMethod("Barotrauma.GUI", "HideCursor", nil, function(instance, ptable)
-    if not enabled() then return end
-    if instance == nil then return end
-    stripLinks(Safe.Get(function() return instance.chatBox.Content end))
-end, Hook.HookMethodType.After)
+local function applyCursorFlag()
+    local wantHidden = shouldHideCursor()
+    Safe.Set(function()
+        if GUI.HideCursor ~= wantHidden then GUI.HideCursor = wantHidden end
+    end)
+end
+
+-- Think loop: re-evaluate periodically rather than every frame. Also
+-- applies once immediately so toggling from the menu feels instant.
+local function tick()
+    applyCursorFlag()
+    Safe.Set(function()
+        Timer.Wait(function() tick() end, TICK_MS)
+    end)
+end
+
+tick()
