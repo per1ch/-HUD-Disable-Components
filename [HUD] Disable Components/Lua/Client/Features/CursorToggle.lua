@@ -27,8 +27,6 @@ local function applyCursorFlag()
     end)
 end
 
--- Think loop: re-evaluate periodically rather than every frame. Also
--- applies once immediately so toggling from the menu feels instant.
 local function tick()
     applyCursorFlag()
     Safe.Set(function()
