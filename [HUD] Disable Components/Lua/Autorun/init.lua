@@ -37,6 +37,7 @@ if SERVER then
     load("Server/ServerState.lua")
     load("Server/Permissions.lua")
     load("Server/Sync.lua")
+    load("Server/ServerPresets.lua")
     load("Server/Moderation.lua")
     load("Server/AliveCommand.lua")
     load("Server/RemoteConsole.lua")
