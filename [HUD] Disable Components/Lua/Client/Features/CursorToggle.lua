@@ -3,7 +3,7 @@ HDC = HDC or {}
 local Safe        = HDC.Safe
 local ClientState = HDC.ClientState
 
-local KEY = "HideOwnCursor"
+local KEY = "HideCursor"
 
 local TICK_MS = 1000  -- 10 Hz; plenty fast for a cursor flag, cheap enough to run forever
 
