@@ -95,6 +95,12 @@ end
 -- until either the server confirms this value or the timeout fires.
 --
 -- Call this AFTER SetLocalPolicyValue and BEFORE Net.RequestPolicyChange.
+-- key -> last value the server actually broadcast for this key. Updated on
+-- every accepted broadcast, whether or not we applied it (a dropped
+-- broadcast due to a pending edit still teaches us what the server thinks
+-- the value is). Used as the fallback when a pending edit times out.
+ClientState.LastServerValue = {}
+
 function ClientState.MarkPending(key, value)
     local token = {}
     ClientState.Pending[key] = { value = value, token = token }
@@ -102,11 +108,15 @@ function ClientState.MarkPending(key, value)
         Timer.Wait(function()
             local entry = ClientState.Pending[key]
             if entry ~= nil and entry.token == token then
-                -- Server never echoed this value back — either our edit was
-                -- rejected or it lost a same-field race to another admin.
-                -- Stop shadowing; the next broadcast or explicit resync
-                -- will bring the true value in.
+                -- Server never echoed this value back: our edit was either
+                -- rejected or lost a same-field race to another admin.
+                -- Stop shadowing and adopt the server's last known value so
+                -- the UI does not lie about what is actually in effect.
                 ClientState.Pending[key] = nil
+                local serverValue = ClientState.LastServerValue[key]
+                if serverValue ~= nil then
+                    ClientState.Values[key] = serverValue
+                end
                 notifyListeners()
             end
         end, PENDING_TIMEOUT_MS)
@@ -118,6 +128,8 @@ function ClientState.ApplyFromServer(values)
     for key, value in pairs(values) do
         local coerced = HDC.CoerceValue(key, value)
         if coerced ~= nil then
+            ClientState.LastServerValue[key] = coerced
+
             local pending = ClientState.Pending[key]
             if pending == nil then
                 ClientState.Values[key] = coerced
@@ -127,9 +139,8 @@ function ClientState.ApplyFromServer(values)
                 ClientState.Values[key] = coerced
             end
             -- else: our edit is still in flight (or lost). Keep the
-            -- optimistic value; the server's next broadcast for THIS field
-            -- will either match (confirm) or differ (lose) and be handled
-            -- by the timeout above.
+            -- optimistic value; the pending timeout above will adopt
+            -- LastServerValue if confirmation never arrives.
         end
     end
     notifyListeners()
