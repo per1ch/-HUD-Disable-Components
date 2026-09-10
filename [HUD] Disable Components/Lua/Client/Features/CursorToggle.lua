@@ -5,33 +5,29 @@ local ClientState = HDC.ClientState
 
 local KEY = "HideCursor"
 
-local TICK_MS = 1000
+local function isAiming()
+    return Safe.Get(function()
+        local c = Character.Controlled
+        if c == nil or c.IsDead == true then return false end
+        return c.IsAiming == true
+    end) == true
+end
 
 local function shouldHideCursor()
-    if ClientState.GetLocal(KEY) ~= true then return false end
+    if ClientState.Get(KEY) ~= true then return false end
     if Safe.Get(function() return GUI.PauseMenuOpen end) == true then return false end
-
-    local controlled = Safe.Get(function()
-        local c = Character.Controlled
-        if c == nil then return false end
-        if c.IsDead == true then return false end
-        return true
-    end)
-    return controlled == true
+    return isAiming()
 end
 
-local function applyCursorFlag()
-    local wantHidden = shouldHideCursor()
+Safe.AddHook("think", "HDC.CursorToggle.Think", function()
+    -- When the policy is off, do not write the flag at all: leaving it
+    -- alone lets vanilla's own aiming logic decide, which is what "off"
+    -- should mean.
+    if ClientState.Get(KEY) ~= true then return end
+    local want = shouldHideCursor()
     Safe.Set(function()
-        if GUI.HideCursor ~= wantHidden then GUI.HideCursor = wantHidden end
+        if GUI.HideCursor ~= want then GUI.HideCursor = want end
     end)
-end
+end)
 
-local function tick()
-    applyCursorFlag()
-    Safe.Set(function()
-        Timer.Wait(function() tick() end, TICK_MS)
-    end)
-end
-
-tick()
+return nil
