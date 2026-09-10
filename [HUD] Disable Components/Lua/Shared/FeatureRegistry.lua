@@ -44,6 +44,7 @@ HDC.FeatureRegistry = {
     { key = "HideChatNameLink",   type = "bool", label = "Chat name links",       desc = "Removes the clickable player-profile link on chat names." },
     { key = "HideQuickMarkIcons", type = "bool", label = "Quick-mark icons",      desc = "Hides fire/breach/etc. icon markers next to chat, leaving the messages themselves visible." },
     { key = "MuteChatGlobal",     type = "bool", label = "Chat (all players)",    desc = "Blocks chat for every player, the same as a manual spam-block." },
+    { key = "HideCursor",         type = "bool", label = "Hide Cursor",    desc = "Hide cursor for players who control a character and not in the Escape menu." },
 
     -- Camera controls
     { key = "LockCameraZoom",      type = "bool",  label = "Lock camera zoom",       desc = "Forces every player's camera to the zoom level set below." },
