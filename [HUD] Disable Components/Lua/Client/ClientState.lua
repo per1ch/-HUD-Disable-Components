@@ -29,13 +29,7 @@ for key, default in pairs(HDC.FeatureDefaults) do
     ClientState.Values[key] = default
 end
 
--- Self-only, driven by client commands rather than the server.
-ClientState.Local = {
-    HideOwnUI     = false, -- item 13
-    HideOwnCursor = false, -- item 14
-}
-
--- key -> { value = <optimistic value>, token = <identity token> }.
+-- key -> { value = <value>, token = <identity token> }.
 -- Present only while an edit is in flight; cleared on server confirmation
 -- or after a timeout.
 ClientState.Pending = {}
