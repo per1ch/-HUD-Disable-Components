@@ -10,13 +10,8 @@
 -- so two admins editing different settings never overwrite each other.
 -- Every broadcast carries a monotonically increasing revision number so a
 -- client can recognise and drop a stale message if one ever arrives out of
--- order.
---
--- PUBLISH
--- Sync.Publish() / Sync.PublishTo(conn) are the only supported way for
--- other server modules (Server/ServerPresets.lua) to push state to
--- clients. Bumping the revision is bundled with the send so callers
--- cannot forget one or the other.
+-- order — belt-and-braces, since a single TCP stream already preserves
+-- ordering, but cheap and it makes forced resyncs unambiguous.
 
 HDC = HDC or {}
 
@@ -28,6 +23,10 @@ local Permissions = HDC.Permissions
 local Sync = {}
 HDC.Sync = Sync
 
+-- Monotonic state-broadcast counter, per server session. Incremented on
+-- anything that should force clients to accept a fresh payload, including
+-- forced resyncs and the rejection echo, so a client is never stuck
+-- ignoring a message whose only job is to correct their optimistic view.
 local revision = 0
 
 function Sync.SendTo(connection)
@@ -49,23 +48,10 @@ function Sync.Broadcast()
     end
 end
 
--- Bump the revision and broadcast to every client. Use this for any change
--- that should be adopted by all connected clients.
-function Sync.Publish()
-    revision = revision + 1
-    Sync.Broadcast()
-end
-
--- Bump the revision and send to a single client. Use this to correct one
--- client's optimistic view without making everyone re-apply.
-function Sync.PublishTo(connection)
-    revision = revision + 1
-    Sync.SendTo(connection)
-end
-
 -- New arrivals get the policy immediately, so they never render a frame
--- with the wrong HUD state. No revision bump: state has not changed, and
--- an unset lastRevision on the client accepts revision 0 fine.
+-- with the wrong HUD state. No revision bump: state has not changed, the
+-- client's lastRevision is unset anyway, and we do not want to make an
+-- existing client ignore this by accident.
 Safe.AddHook("clientConnected", "HDC.Sync.ClientConnected", function(client)
     local connection = Safe.Get(function() return client.Connection end)
     if connection == nil then return end
@@ -79,7 +65,11 @@ Networking.Receive(NetIds.EditRequest, function(message, sender)
     if not Permissions.CanEditPolicy(sender) then
         Safe.Log("rejected settings change from " .. Permissions.DescribeClient(sender) ..
                  " (missing " .. Permissions.POLICY_COMMAND .. " permission)")
-        Sync.PublishTo(Safe.Get(function() return sender.Connection end))
+        -- Re-send the true state so their menu snaps back. Bump revision so
+        -- the client actually accepts the correction instead of discarding
+        -- it as a duplicate of a message they already applied.
+        revision = revision + 1
+        Sync.SendTo(Safe.Get(function() return sender.Connection end))
         return
     end
 
@@ -89,9 +79,14 @@ Networking.Receive(NetIds.EditRequest, function(message, sender)
         return
     end
 
+    -- ApplyTable only touches the keys present in the payload, which is why
+    -- delta edits are safe: two admins editing different settings never
+    -- clobber each other.
     ServerState.ApplyTable(proposed)
     ServerState.Save()
-    Sync.Publish()
+
+    revision = revision + 1
+    Sync.Broadcast()
 
     Safe.Log("settings updated by " .. Permissions.DescribeClient(sender))
 end)
@@ -103,7 +98,11 @@ Safe.AddCommand("hdc_serverstate", "Print the current [HUD] Disable Components p
 
 Safe.AddCommand("hdc_resync", "Re-send the current [HUD] Disable Components policy to every client.",
     function()
-        Sync.Publish()
+        -- Bump even though the values may not have changed: this command
+        -- exists precisely to force clients to re-apply, which requires a
+        -- revision newer than whatever they last saw.
+        revision = revision + 1
+        Sync.Broadcast()
         print("[HDC] Policy re-sent to all clients.")
     end, nil, false)
 
