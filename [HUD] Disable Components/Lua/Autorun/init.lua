@@ -81,7 +81,8 @@ if CLIENT then
     load("Client/Features/QuickMarkIcons.lua")   -- 15
     load("Client/Features/ChatMuteGlobal.lua")   -- 16 (global half)
     load("Client/Features/Camera.lua")           -- camera zoom / follow-cursor
-
+    load("Client/Features/HideCharacterOrders.lua")
+    
     load("Client/Commands.lua")
 
     HDC.Safe.Log("client module loaded (v" .. HDC.Version .. ")")
