@@ -51,5 +51,3 @@ Safe.PatchMethod("Barotrauma.GUI", "DrawCursor", nil, function(instance, ptable)
         ptable.PreventExecution = true
     end
 end, Hook.HookMethodType.Before)
-
-return nil
