@@ -10,6 +10,14 @@
 -- everyone else the toggles render dimmed and do nothing. The server is
 -- the authority either way (Server/Sync.lua re-broadcasts the true state
 -- after any rejected edit).
+--
+-- EDITS ARE DELTAS
+-- Every edit sends only the keys it actually changed, never a full
+-- snapshot. A snapshot makes two admins editing different settings
+-- overwrite each other with stale values carried inside their own
+-- snapshot — that is the "settings are jumpy" bug. Each edit is also
+-- registered as pending in ClientState so an in-flight broadcast cannot
+-- roll the local value back before the server echoes it.
 
 HDC = HDC or {}
 
@@ -87,15 +95,23 @@ function SettingsMenu.Refresh()
     end
 end
 
-local function commitChange()
-    if Net.IsMultiplayer() then
-        Net.RequestPolicyChange(ClientState.Snapshot())
+-- Sends a delta upstream (or does nothing in singleplayer) and refreshes
+-- the local visuals. `changes` is a table mapping key -> new value and
+-- must contain only the fields this action actually edited.
+local function commitChange(changes)
+    if Net.IsMultiplayer() and changes ~= nil then
+        Net.RequestPolicyChange(changes)
     end
     SettingsMenu.Refresh()
 end
 
-local function setValue(key, value)
+-- Records the new value locally, marks it pending, and returns the delta
+-- table to hand to commitChange. Doing all three in one place keeps the
+-- three steps from drifting out of sync at any call site.
+local function applyEdit(key, value)
     ClientState.SetLocalPolicyValue(key, value)
+    ClientState.MarkPending(key, value)
+    return { [key] = value }
 end
 
 local function build()
@@ -198,8 +214,7 @@ local function build()
                 local entered = Safe.Get(function() return numberInput.FloatValue end)
                 if entered == nil then return end
                 if math.abs(entered - ClientState.GetNumber(capturedKey)) < 1e-4 then return end
-                setValue(capturedKey, entered)
-                commitChange()
+                commitChange(applyEdit(capturedKey, entered))
             end
 
             ui.rows[entry.key] = { numberInput = numberInput, indicator = indicator }
@@ -212,8 +227,8 @@ local function build()
 
             toggle.OnClicked = function()
                 if not ui.canEdit then return true end
-                setValue(capturedKey, not (ClientState.Get(capturedKey) == true))
-                commitChange()
+                local newValue = not (ClientState.Get(capturedKey) == true)
+                commitChange(applyEdit(capturedKey, newValue))
                 return true
             end
 
@@ -235,11 +250,18 @@ local function build()
 
     -- Bulk actions apply to the on/off settings only. Sweeping the numeric
     -- ones to true/false would be meaningless and would silently destroy a
-    -- configured zoom level.
-    local function setAllBools(value)
+    -- configured zoom level. They still send a delta: only the keys they
+    -- actually touched, never a full snapshot.
+    local function applyAllBools(value)
+        local changes = {}
         for _, entry in ipairs(HDC.FeatureRegistry) do
-            if entry.type ~= "float" then setValue(entry.key, value) end
+            if entry.type ~= "float" then
+                ClientState.SetLocalPolicyValue(entry.key, value)
+                ClientState.MarkPending(entry.key, value)
+                changes[entry.key] = value
+            end
         end
+        return changes
     end
 
     local enableAll = GUI.Button(
@@ -247,8 +269,7 @@ local function build()
         "Enable All", GUI.Alignment.Center, "GUIButton")
     enableAll.OnClicked = function()
         if not ui.canEdit then return true end
-        setAllBools(true)
-        commitChange()
+        commitChange(applyAllBools(true))
         return true
     end
 
@@ -258,8 +279,7 @@ local function build()
     disableAll.RectTransform.RelativeOffset = Vector2(0.25, 0)
     disableAll.OnClicked = function()
         if not ui.canEdit then return true end
-        setAllBools(false)
-        commitChange()
+        commitChange(applyAllBools(false))
         return true
     end
 
