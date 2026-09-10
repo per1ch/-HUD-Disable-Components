@@ -1,6 +1,6 @@
 -- Lua/Client/Features/UpperHud.lua — CLIENT
 -- Spec item 10: hide the upper HUD crew panel and the respawn / round-end
--- timers, and keep an !alive command for checking crew status.
+-- timers.
 --
 -- IMPORTANT — why this is done by rendering only:
 -- The reference mod for this feature hides players by REMOVING them from
@@ -10,15 +10,24 @@
 -- died on a mission" even after a success, because the game genuinely
 -- believes the crew is gone.
 --
--- This module therefore never touches the real list. It suppresses the
--- draw/update calls only, so the game's own state stays fully intact and
--- every one of those bugs is avoided by construction.
+-- This module never touches the real list. It suppresses visibility only,
+-- so the game's own state stays fully intact.
 --
--- Team handling: the suppression is team-agnostic. It applies to the crew
--- panel regardless of which TeamID it is rendering, which is why entries
--- do not "show through" for Team 1 in two-team modes (PvP/Traitor) the way
--- they do in the reference mod. Bots are ordinary characters on a team and
--- are covered by the same pass, with no special-casing.
+-- What this actually patches (the previous version hooked three names that
+-- do not exist in the client source):
+--   * CrewManager.crewArea — the crew panel. UpdateProjectSpecific sets
+--     its Visible every frame, so an After hook forcing it false wins.
+--   * GameSession.topLeftButtonGroup — the strip holding the crew-list
+--     toggle, command button, tab-menu button, respawn info text and
+--     death-choice buttons. AddToGUIUpdateList also queues GameMode,
+--     TabMenu, ObjectiveManager and DeathPrompt, so PreventExecution
+--     there would break all of those; an After hook that flips Visible
+--     hides only the strip.
+--
+-- crewArea and topLeftButtonGroup are private fields. If LuaCs refuses to
+-- read them from this build, make them accessible first with
+-- Safe.MakeFieldAccessible("Barotrauma.CrewManager",     "crewArea")
+-- Safe.MakeFieldAccessible("Barotrauma.GameSession",     "topLeftButtonGroup")
 
 HDC = HDC or {}
 
@@ -28,36 +37,25 @@ local ClientState = HDC.ClientState
 local KEY = "HideUpperHud"
 
 local function enabled()
-    return ClientState.Get(KEY)
+    return ClientState.Get(KEY) == true
 end
 
-Safe.PatchMethod("Barotrauma.CrewManager", "AddToGUIUpdateList", nil, function(instance, ptable)
+Safe.PatchMethod("Barotrauma.CrewManager", "UpdateProjectSpecific", nil, function(instance, ptable)
     if not enabled() then return end
-    ptable.PreventExecution = true
-end, Hook.HookMethodType.Before)
+    if instance == nil then return end
+    Safe.Set(function()
+        if instance.crewArea ~= nil then
+            instance.crewArea.Visible = false
+        end
+    end)
+end, Hook.HookMethodType.After)
 
-Safe.PatchMethod("Barotrauma.CrewManager", "UpdateCrewListIndicators", nil, function(instance, ptable)
+Safe.PatchMethod("Barotrauma.GameSession", "AddToGUIUpdateList", nil, function(instance, ptable)
     if not enabled() then return end
-    ptable.PreventExecution = true
-end, Hook.HookMethodType.Before)
-
--- Respawn timer / respawn shuttle countdown.
-Safe.PatchMethod("Barotrauma.RespawnManager", "DrawRespawnInfo", nil, function(instance, ptable)
-    if not enabled() then return end
-    ptable.PreventExecution = true
-end, Hook.HookMethodType.Before)
-
--- Round-end / mission countdown readout.
-Safe.PatchMethod("Barotrauma.GameSession", "DrawRoundInfo", nil, function(instance, ptable)
-    if not enabled() then return end
-    ptable.PreventExecution = true
-end, Hook.HookMethodType.Before)
-
--- Fallback: hide the crew frame outright if a draw path above was renamed
--- in a game update. Visibility only — the list contents stay untouched.
-Safe.AddHook("think", "HDC.UpperHud.HideFrames", function()
-    if not enabled() then return end
-    local crew = Safe.Get(function() return GameMain.GameSession.CrewManager end)
-    if crew == nil then return end
-    Safe.Set(function() crew.GetCrewFrame().Visible = false end)
-end)
+    if instance == nil then return end
+    Safe.Set(function()
+        if instance.topLeftButtonGroup ~= nil then
+            instance.topLeftButtonGroup.Visible = false
+        end
+    end)
+end, Hook.HookMethodType.After)
