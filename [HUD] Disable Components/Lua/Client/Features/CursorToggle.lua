@@ -29,5 +29,3 @@ Safe.AddHook("think", "HDC.CursorToggle.Think", function()
         if GUI.HideCursor ~= want then GUI.HideCursor = want end
     end)
 end)
-
-return nil
