@@ -1,4 +1,6 @@
 -- Lua/Client/CursorToggle.lua — CLIENT
+--https://github.com/FakeFishGames/Barotrauma/blob/master/Barotrauma/BarotraumaClient/ClientSource/GUI/GUI.cs
+--https://github.com/FakeFishGames/Barotrauma/blob/master/Barotrauma/BarotraumaClient/ClientSource/Characters/Character.cs
 -- Policy is synced like any other feature. When on, the player's cursor is
 -- hidden while aiming (ranged weapon or turret). When off, we touch nothing
 -- and vanilla behavior rules.
